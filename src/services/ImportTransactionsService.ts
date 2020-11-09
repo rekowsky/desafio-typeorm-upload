@@ -19,30 +19,31 @@ class ImportTransactionsService {
     const transactionRepository = getCustomRepository(TransactionRepository);
     const categoriesRepository = getRepository(Category);
 
+    const transactions: CSVTransaction[] = [];
+    const categories: string[] = [];
+
     const contactsReadStream = fs.createReadStream(filepath);
 
     const parsers = csvParse({
       from_line: 2,
+      ltrim: true,
+      rtrim: true,
+      delimiter: ',',
     });
 
     const parseCSV = contactsReadStream.pipe(parsers);
-
-    const transactions: CSVTransaction[] = [];
-    const categories: string[] = [];
 
     parseCSV.on('data', async line => {
       const [title, type, value, category] = line.map((cell: string) =>
         cell.trim(),
       );
+
+      if (!title || !type || !value) return;
+
+      categories.push(category);
+
+      transactions.push({ title, type, value, category });
     });
-
-    if (!title || !type || !value) {
-      return;
-    }
-
-    categories.push(category);
-
-    transactions.push({ title, type, value, category });
 
     await new Promise(resolve => parseCSV.on('end', resolve));
 
@@ -84,6 +85,8 @@ class ImportTransactionsService {
     await transactionRepository.save(createdTransactions);
 
     await fs.promises.unlink(filepath);
+
+    return createdTransactions;
   }
 }
 
